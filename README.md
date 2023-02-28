@@ -13,4 +13,4 @@ Once protoype PCB has been assembled the development of the firmware will begin.
 The firmware will be written in Rust.
 
 ## Current design
-![image](https://user-images.githubusercontent.com/6892524/219718186-dd6b4d7f-364a-41a3-b798-ba45a308cf2e.png)
+![keyboard](https://user-images.githubusercontent.com/6892524/221995114-8ee5f6ea-72d3-4f23-98c5-c86f086b9b99.jpg)
