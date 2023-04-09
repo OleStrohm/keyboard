@@ -111,11 +111,14 @@ fn run() -> ! {
         NVIC::unmask(Interrupt::USBCTRL_IRQ);
     }
 
-    info!("Preparing to send key!");
+    info!("Firmware started!");
 
-    delay.delay_ms(2500);
-    info!("Sent key!");
-
+    let mut prev_report = KeyboardReport {
+        modifier: 0,
+        reserved: 0,
+        leds: 0,
+        keycodes: [0; 6],
+    };
     loop {
         let mut keys = [0, 0, 0, 0, 0, 0];
         let mut pressed_keys = 0;
@@ -134,13 +137,18 @@ fn run() -> ! {
             keys[pressed_keys] = 32;
             pressed_keys += 1;
         }
-        push_key(KeyboardReport {
+
+        let new_report = KeyboardReport {
             modifier: 0,
             reserved: 0,
             leds: 0,
             keycodes: keys,
-        })
-        .unwrap();
+        };
+        if new_report.keycodes != prev_report.keycodes {
+            println!("Sent keyboard report");
+            prev_report = new_report;
+            push_key(new_report).unwrap();
+        }
 
         if pressed_keys == 0 {
             green.off().unwrap();
