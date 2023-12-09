@@ -1,20 +1,24 @@
 #![no_std]
 #![no_main]
 
-use bsp::entry;
+use bsp::{
+    entry,
+    hal::{Clock, Timer},
+};
 use cortex_m::peripheral::NVIC;
 use defmt::*;
 use defmt_rtt as _;
-use fugit::RateExtU32;
+use embedded_hal::timer::CountDown;
+use fugit::{ExtU32, RateExtU32};
 use panic_probe as _;
 
 use port_expander::Pca9555;
 use seeeduino_xiao_rp2040 as bsp;
 
 use bsp::hal::{
-    clocks::{init_clocks_and_plls, Clock},
+    clocks::init_clocks_and_plls,
     i2c::I2C,
-    pac::{self, interrupt, Interrupt},
+    pac::{self, Interrupt},
     sio::Sio,
     usb::UsbBus,
     watchdog::Watchdog,
@@ -22,10 +26,9 @@ use bsp::hal::{
 use switch_hal::{ActiveLow, OutputSwitch, Switch};
 use usb_device::class_prelude::*;
 use usb_device::prelude::*;
-use usbd_hid::{
-    descriptor::{KeyboardReport, SerializedDescriptor},
-    hid_class::HIDClass,
-};
+use usbd_human_interface_device::device::keyboard::NKROBootKeyboardConfig;
+use usbd_human_interface_device::page::Keyboard;
+use usbd_human_interface_device::prelude::*;
 
 #[entry]
 fn main() -> ! {
@@ -53,7 +56,8 @@ fn run() -> ! {
     .ok()
     .unwrap();
 
-    let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
+    let timer = Timer::new(pac.TIMER, &mut pac.RESETS);
 
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -84,108 +88,137 @@ fn run() -> ! {
     let sw8 = pca_pins.io0_4;
     let sw9 = pca_pins.io0_3;
 
-    let bus = unsafe {
-        USB_BUS = Some(UsbBusAllocator::new(UsbBus::new(
-            pac.USBCTRL_REGS,
-            pac.USBCTRL_DPRAM,
-            clocks.usb_clock,
-            true,
-            &mut pac.RESETS,
-        )));
-        USB_BUS.as_ref().unwrap()
-    };
+    let usb_alloc = UsbBusAllocator::new(UsbBus::new(
+        pac.USBCTRL_REGS,
+        pac.USBCTRL_DPRAM,
+        clocks.usb_clock,
+        true,
+        &mut pac.RESETS,
+    ));
 
-    unsafe {
-        USB_HID = Some(HIDClass::new(bus, KeyboardReport::desc(), 60));
-        USB_DEVICE = Some(
-            UsbDeviceBuilder::new(bus, UsbVidPid(0x16c0, 0x27dd))
-                .manufacturer("Ole Marius Strohm")
-                .product("Rusty Keyboard")
-                .serial_number("OLESTROHM")
-                .build(),
-        );
-    }
+    let mut keyboard = UsbHidClassBuilder::new()
+        .add_device(NKROBootKeyboardConfig::default())
+        .build(&usb_alloc);
 
-    unsafe {
-        core.NVIC.set_priority(Interrupt::USBCTRL_IRQ, 1);
-        NVIC::unmask(Interrupt::USBCTRL_IRQ);
-    }
+    let mut usb_dev = UsbDeviceBuilder::new(&usb_alloc, UsbVidPid(0x1209, 0x0001))
+        .manufacturer("Ole Marius Strohm")
+        .product("Rusty Keyboard")
+        .serial_number("OLESTROHM")
+        .build();
+
+    //unsafe {
+    //    core.NVIC.set_priority(Interrupt::USBCTRL_IRQ, 1);
+    //    NVIC::unmask(Interrupt::USBCTRL_IRQ);
+    //}
 
     info!("Firmware started!");
 
-    let mut prev_report = KeyboardReport {
-        modifier: 0,
-        reserved: 0,
-        leds: 0,
-        keycodes: [0; 6],
-    };
+    //let mut prev_report = KeyboardReport {
+    //    modifier: 0,
+    //    reserved: 0,
+    //    leds: 0,
+    //    keycodes: [0; 6],
+    //};
+    let mut input_timer = timer.count_down();
+    input_timer.start(10.millis());
+    let mut tick_timer = timer.count_down();
+    tick_timer.start(1.millis());
+
     loop {
-        let mut keys = [0, 0, 0, 0, 0, 0];
-        let mut pressed_keys = 0;
-        if sw7.is_low().unwrap() {
-            info!("pressed SW7");
-            keys[pressed_keys] = 30;
-            pressed_keys += 1;
-        }
-        if sw8.is_low().unwrap() {
-            info!("pressed SW8");
-            keys[pressed_keys] = 31;
-            pressed_keys += 1;
-        }
-        if sw9.is_low().unwrap() {
-            info!("pressed SW9");
-            keys[pressed_keys] = 32;
-            pressed_keys += 1;
-        }
+        if input_timer.wait().is_ok() {
+            let mut keys = [0, 0, 0, 0, 0, 0];
+            let mut pressed_keys = 0;
+            if sw7.is_low().unwrap() {
+                //info!("pressed SW7");
+                keys[pressed_keys] = 30;
+                pressed_keys += 1;
+            }
+            if sw8.is_low().unwrap() {
+                //info!("pressed SW8");
+                keys[pressed_keys] = 31;
+                pressed_keys += 1;
+            }
+            if sw9.is_low().unwrap() {
+                //info!("pressed SW9");
+                keys[pressed_keys] = 32;
+                pressed_keys += 1;
+            }
 
-        let new_report = KeyboardReport {
-            modifier: 0,
-            reserved: 0,
-            leds: 0,
-            keycodes: keys,
-        };
+            let keys = if sw8.is_low().unwrap() {
+                info!("pressed SW8");
+                [Keyboard::A]
+            } else {
+                [Keyboard::NoEventIndicated]
+            };
 
-        if new_report.keycodes != prev_report.keycodes {
-            println!("report is different: {}", keys);
-            prev_report = new_report;
-            if let Ok(size) = push_key(new_report) {
-                println!("Sent keyboard report of size {}", size);
+            if pressed_keys == 0 {
+                green.off().unwrap();
+            } else {
+                green.on().unwrap();
+            }
+
+            match keyboard.device().write_report(keys) {
+                Ok(_) | Err(UsbHidError::WouldBlock | UsbHidError::Duplicate) => {}
+                Err(e) => core::panic!("Failed to write keyboard report: {e:?}"),
             }
         }
 
-        if pressed_keys == 0 {
-            green.off().unwrap();
-        } else {
-            green.on().unwrap();
+        if tick_timer.wait().is_ok() {
+            match keyboard.tick() {
+                Ok(_) | Err(UsbHidError::WouldBlock) => {}
+                Err(e) => core::panic!("tick error: {e:?}"),
+            }
         }
-        delay.delay_ms(70);
+        //let new_report = KeyboardReport {
+        //    modifier: 0,
+        //    reserved: 0,
+        //    leds: 0,
+        //    keycodes: keys,
+        //};
+
+        //if new_report.keycodes != prev_report.keycodes {
+        //    println!("report is different: {}", keys);
+        //    prev_report = new_report;
+        //    if let Ok(size) = push_key(new_report) {
+        //        println!("Sent keyboard report of size {}", size);
+        //    }
+        //}
+
+        #[allow(clippy::collapsible_if)]
+        if usb_dev.poll(&mut [&mut keyboard]) {
+            match keyboard.device().read_report() {
+                Ok(_) => info!("update leds"),
+                Err(UsbError::WouldBlock) => {}
+                Err(e) => core::panic!("Failed to read keyboard input: {e:?}"),
+            }
+        }
     }
 }
 
-fn push_key(report: KeyboardReport) -> Result<usize, usb_device::UsbError> {
-    cortex_m::interrupt::free(|_| unsafe {
-        let hid = USB_HID.as_mut().unwrap();
-        hid.push_input(&report)
-    })
-}
+//fn push_key(report: KeyboardReport) -> Result<usize, usb_device::UsbError> {
+//    cortex_m::interrupt::free(|_| unsafe {
+//        let hid = USB_HID.as_mut().unwrap();
+//        hid.push_input(&report)
+//    })
+//}
 
-static mut USB_BUS: Option<UsbBusAllocator<UsbBus>> = None;
-static mut USB_HID: Option<HIDClass<UsbBus>> = None;
-static mut USB_DEVICE: Option<UsbDevice<UsbBus>> = None;
+//static mut USB_BUS: Option<UsbBusAllocator<UsbBus>> = None;
+//static mut USB_HID: Option<HIDClass<UsbBus>> = None;
+//static mut USB_DEVICE: Option<UsbDevice<UsbBus>> = None;
 
-fn poll_usb() {
-    unsafe {
-        let Some(dev) = USB_DEVICE.as_mut() else {
-            return;
-        };
-        let Some(hid) = USB_HID.as_mut() else { return };
+//fn poll_usb() {
+//    unsafe {
+//        let Some(dev) = USB_DEVICE.as_mut() else {
+//            return;
+//        };
+//        let Some(hid) = USB_HID.as_mut() else { return };
+//
+//        dev.poll(&mut [hid]);
+//    }
+//}
 
-        dev.poll(&mut [hid]);
-    }
-}
-
-#[allow(non_snake_case)]
-#[interrupt]
-fn USBCTRL_IRQ() {
-    poll_usb();
-}
+//#[allow(non_snake_case)]
+//#[interrupt]
+//fn USBCTRL_IRQ() {
+//    poll_usb();
+//}
