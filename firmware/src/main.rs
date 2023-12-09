@@ -144,10 +144,13 @@ fn run() -> ! {
             leds: 0,
             keycodes: keys,
         };
+
         if new_report.keycodes != prev_report.keycodes {
-            println!("Sent keyboard report");
+            println!("report is different: {}", keys);
             prev_report = new_report;
-            push_key(new_report).unwrap();
+            if let Ok(size) = push_key(new_report) {
+                println!("Sent keyboard report of size {}", size);
+            }
         }
 
         if pressed_keys == 0 {
@@ -161,7 +164,8 @@ fn run() -> ! {
 
 fn push_key(report: KeyboardReport) -> Result<usize, usb_device::UsbError> {
     cortex_m::interrupt::free(|_| unsafe {
-        USB_HID.as_mut().map(|hid| hid.push_input(&report)).unwrap()
+        let hid = USB_HID.as_mut().unwrap();
+        hid.push_input(&report)
     })
 }
 
@@ -171,7 +175,9 @@ static mut USB_DEVICE: Option<UsbDevice<UsbBus>> = None;
 
 fn poll_usb() {
     unsafe {
-        let Some(dev) = USB_DEVICE.as_mut() else { return };
+        let Some(dev) = USB_DEVICE.as_mut() else {
+            return;
+        };
         let Some(hid) = USB_HID.as_mut() else { return };
 
         dev.poll(&mut [hid]);
