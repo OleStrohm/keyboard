@@ -169,22 +169,7 @@ fn run() -> ! {
                 Err(e) => core::panic!("tick error: {e:?}"),
             }
         }
-        //let new_report = KeyboardReport {
-        //    modifier: 0,
-        //    reserved: 0,
-        //    leds: 0,
-        //    keycodes: keys,
-        //};
 
-        //if new_report.keycodes != prev_report.keycodes {
-        //    println!("report is different: {}", keys);
-        //    prev_report = new_report;
-        //    if let Ok(size) = push_key(new_report) {
-        //        println!("Sent keyboard report of size {}", size);
-        //    }
-        //}
-
-        #[allow(clippy::collapsible_if)]
         if usb_dev.poll(&mut [&mut keyboard]) {
             match keyboard.device().read_report() {
                 Ok(_) => info!("update leds"),
