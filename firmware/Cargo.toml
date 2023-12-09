@@ -19,7 +19,7 @@ seeeduino-xiao-rp2040 = "0.4.0"
 
 # Ports
 switch-hal = "0.4.0"
-port-expander = "0.3.0"
+port-expander = "0.4.0"
 
 # USB stuff
 usb-device = "0.2.9"
@@ -28,6 +28,8 @@ usbd-hid = "0.6.1"
 #Other
 fugit = "0.3.6"
 usbd-human-interface-device = { version = "0.4.4", features = ["defmt"] }
+shared-bus = "0.3.1"
+heapless = "0.8.0"
 
 # cargo build/run
 [profile.dev]
