@@ -19,9 +19,7 @@ use usbd_human_interface_device::{
     device::keyboard::NKROBootKeyboardConfig, page::Keyboard as Key, prelude::*,
 };
 
-use crate::keyboard::Keyboard;
-
-mod keyboard;
+use keyboard::Keyboard;
 
 #[entry]
 fn main() -> ! {

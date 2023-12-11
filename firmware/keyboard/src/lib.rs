@@ -1,3 +1,5 @@
+#![no_std]
+
 use core::iter::zip;
 
 use heapless::Vec;

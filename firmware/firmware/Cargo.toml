@@ -1,0 +1,35 @@
+[package]
+edition = "2021"
+name = "keyboard-firmware"
+version = "0.1.0"
+
+[dependencies]
+# hardware interfaces
+cortex-m = "0.7.2"
+cortex-m-rt = "0.7"
+embedded-hal = { version = "0.2.5", features = ["unproven"] }
+
+# Logging
+defmt = "0.3"
+defmt-rtt = "0.4"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+# The specific board
+seeeduino-xiao-rp2040 = "0.4.0"
+
+# Ports
+switch-hal = "0.4.0"
+port-expander = "0.4.0"
+
+# USB stuff
+usb-device = "0.2.9"
+usbd-hid = "0.6.1"
+
+#Other
+fugit = "0.3.6"
+usbd-human-interface-device = { version = "0.4.4", features = ["defmt"] }
+shared-bus = "0.3.1"
+heapless = "0.8.0"
+
+# Keyboard logic
+keyboard = { path = "../keyboard" }
